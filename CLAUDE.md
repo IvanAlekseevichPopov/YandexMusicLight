@@ -10,48 +10,72 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - Kotlin
 - Jetpack Compose + Material 3
-- Navigation Compose для навигации
+- Navigation Compose
+- Retrofit + OkHttp
 - Gradle с Kotlin DSL
-- Минимальный SDK: 26 (Android 8.0)
-- Target SDK: 34
+- Min SDK: 26, Target SDK: 34
 
 ## Команды сборки
 
 ```bash
-# Сборка debug-версии
-./gradlew assembleDebug
-
-# Сборка release-версии
-./gradlew assembleRelease
-
-# Запуск тестов
-./gradlew test
-
-# Проверка линтером
-./gradlew lint
+./gradlew assembleDebug      # Сборка debug
+./gradlew assembleRelease    # Сборка release
+./gradlew test               # Тесты
+./gradlew lint               # Линтер
 ```
 
-## Структура проекта
+## Модульная структура
 
 ```
-app/src/main/java/com/example/yandexmusic/
-├── MainActivity.kt          # Точка входа
-├── navigation/              # Навигация приложения
-├── ui/                      # UI компоненты и экраны
-│   ├── screens/            # Экраны приложения
-│   └── theme/              # Тема Material 3
-└── data/                    # Работа с данными и API
+:app                 — точка входа, навигация
+:core:network        — Retrofit API клиент
+:core:data           — репозитории, кэширование
+:core:ui             — тема, общие компоненты
+:feature:home        — экран "Главная"
+:feature:search      — экран "Поиск"
+:feature:library     — экран "Моя музыка"
 ```
 
-## Yandex Music API
+## Документация модулей
 
-- API неофициальный, базовый URL: `api.music.yandex.net`
-- Требуется токен аутентификации от аккаунта Яндекс
-- Токен хранить в `local.properties` (не коммитить)
+| Модуль | README | Назначение |
+|--------|--------|------------|
+| `:app` | [app/README.md](app/README.md) | Точка входа, навигация |
+| `:core:network` | [core/network/README.md](core/network/README.md) | API клиент Yandex Music |
+| `:core:data` | [core/data/README.md](core/data/README.md) | Репозитории данных |
+| `:core:ui` | [core/ui/README.md](core/ui/README.md) | Тема и UI компоненты |
+| `:feature:home` | [feature/home/README.md](feature/home/README.md) | Экран главной |
+| `:feature:search` | [feature/search/README.md](feature/search/README.md) | Экран поиска |
+| `:feature:library` | [feature/library/README.md](feature/library/README.md) | Экран библиотеки |
+
+## Граф зависимостей
+
+```
+:app
+ ├── :feature:home ──┬── :core:ui
+ ├── :feature:search ┼── :core:data ── :core:network
+ └── :feature:library┘
+```
+
+## API Reference
+
+Полная документация Yandex Music API: [API_REFERENCE.md](API_REFERENCE.md)
+
+**Base URL:** `https://api.music.yandex.net`
+
+**Аутентификация:** `Authorization: OAuth {token}`
 
 ## Переменные окружения
 
-В файле `local.properties`:
+В файле `local.properties` (не коммитить):
 ```
 YANDEX_TOKEN=ваш_токен
 ```
+
+## Правила для ИИ-агента
+
+1. **Изоляция модулей** — бизнес-логика в feature-модулях, не в :app
+2. **Зависимости** — feature зависит от core, не наоборот
+3. **API** — все сетевые вызовы через :core:network
+4. **UI компоненты** — переиспользуемые компоненты в :core:ui
+5. **Перед работой** — читать README соответствующего модуля

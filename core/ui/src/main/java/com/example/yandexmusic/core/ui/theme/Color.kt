@@ -1,4 +1,4 @@
-package com.example.yandexmusic.ui.theme
+package com.example.yandexmusic.core.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

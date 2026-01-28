@@ -15,4 +15,11 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "YandexMusic"
+
 include(":app")
+include(":core:network")
+include(":core:data")
+include(":core:ui")
+include(":feature:home")
+include(":feature:search")
+include(":feature:library")

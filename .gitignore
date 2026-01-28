@@ -8,5 +8,12 @@
 .externalNativeBuild
 .cxx
 local.properties
+core/app/build
+core/data/build
+core/network/build
+core/ui/build
+feature/home/build
+feature/library/build
+feature/search/build
 app/build
 /gradle

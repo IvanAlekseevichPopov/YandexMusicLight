@@ -1,4 +1,4 @@
-package com.example.yandexmusic.ui.theme
+package com.example.yandexmusic.core.ui.theme
 
 import android.app.Activity
 import androidx.compose.foundation.isSystemInDarkTheme
