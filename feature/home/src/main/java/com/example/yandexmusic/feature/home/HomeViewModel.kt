@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.yandexmusic.core.data.MusicRepository
 import com.example.yandexmusic.core.data.PlayerService
+import com.example.yandexmusic.core.network.ChartTrack
 import com.example.yandexmusic.core.network.dto.feed.GeneratedPlaylist
 import com.example.yandexmusic.core.network.dto.track.TrackUrl
 import kotlinx.coroutines.Job
@@ -20,6 +21,7 @@ import kotlinx.coroutines.launch
 data class HomeUiState(
     val isPlaying: Boolean = false,
     val generatedPlaylists: List<GeneratedPlaylist> = emptyList(),
+    val chartTracks: List<ChartTrack> = emptyList(),
     val currentTrackUrl: TrackUrl? = null,
     val currentTrackTitle: String? = null,
     val isLoading: Boolean = false,
@@ -71,12 +73,19 @@ class HomeViewModel(
 
             repository.getFeed()
                 .onSuccess { feedResult ->
-                    Log.d(TAG, "loadFeed: success, playlists=${feedResult.generatedPlaylists?.size}")
-                    _uiState.update { state ->
-                        state.copy(
-                            generatedPlaylists = feedResult.generatedPlaylists ?: emptyList(),
-                            isLoading = false
-                        )
+                    val playlists = feedResult.generatedPlaylists ?: emptyList()
+                    Log.d(TAG, "loadFeed: success, playlists=${playlists.size}")
+
+                    if (playlists.isEmpty()) {
+                        Log.d(TAG, "loadFeed: no playlists, loading chart as fallback")
+                        loadChart()
+                    } else {
+                        _uiState.update { state ->
+                            state.copy(
+                                generatedPlaylists = playlists,
+                                isLoading = false
+                            )
+                        }
                     }
                 }
                 .onFailure { exception ->
@@ -89,6 +98,29 @@ class HomeViewModel(
                     }
                 }
         }
+    }
+
+    private suspend fun loadChart() {
+        repository.getChart()
+            .onSuccess { chartResult ->
+                val tracks = chartResult.chart?.tracks ?: emptyList()
+                Log.d(TAG, "loadChart: success, tracks=${tracks.size}")
+                _uiState.update { state ->
+                    state.copy(
+                        chartTracks = tracks,
+                        isLoading = false
+                    )
+                }
+            }
+            .onFailure { exception ->
+                Log.e(TAG, "loadChart: failure", exception)
+                _uiState.update { state ->
+                    state.copy(
+                        isLoading = false,
+                        error = exception.message ?: "Unknown error"
+                    )
+                }
+            }
     }
 
     fun playTrack(trackId: Long, trackTitle: String? = null) {
@@ -123,12 +155,20 @@ class HomeViewModel(
     fun togglePlayPause() {
         val state = _uiState.value
         if (state.currentTrackUrl == null) {
-            // Нет текущего трека — берём первый из первого плейлиста
-            val firstTrack = state.generatedPlaylists
+            // Нет текущего трека — берём первый из плейлиста или чарта
+            val playlistTrack = state.generatedPlaylists
                 .firstOrNull()?.data?.tracks?.firstOrNull()
-            if (firstTrack != null) {
+            if (playlistTrack != null) {
                 val playlistTitle = state.generatedPlaylists.firstOrNull()?.data?.title
-                playTrack(firstTrack.id ?: return, playlistTitle)
+                playTrack(playlistTrack.id ?: return, playlistTitle)
+                return
+            }
+
+            val chartTrack = state.chartTracks.firstOrNull()?.track
+            if (chartTrack != null) {
+                val title = chartTrack.artists?.firstOrNull()?.let { "${it.name} — ${chartTrack.title}" }
+                    ?: chartTrack.title
+                playTrack(chartTrack.id, title)
             }
             return
         }

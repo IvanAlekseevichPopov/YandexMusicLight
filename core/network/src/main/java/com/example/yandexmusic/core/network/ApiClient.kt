@@ -15,6 +15,8 @@ object ApiClient {
 
     private var oauthToken: String = ""
 
+    var onUnauthorized: (() -> Unit)? = null
+
     fun setToken(token: String) {
         oauthToken = token
         Log.d(TAG, "Token set, length: ${token.length}")
@@ -26,7 +28,12 @@ object ApiClient {
             .addHeader("X-Yandex-Music-Client", "YandexMusicAndroid/24023621")
             .addHeader("X-Request-Id", UUID.randomUUID().toString())
             .build()
-        chain.proceed(request)
+        val response = chain.proceed(request)
+        if (response.code == 401) {
+            Log.w(TAG, "401 Unauthorized, triggering logout")
+            onUnauthorized?.invoke()
+        }
+        response
     }
 
     private val loggingInterceptor = HttpLoggingInterceptor { message ->

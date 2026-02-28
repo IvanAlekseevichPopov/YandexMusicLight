@@ -121,16 +121,15 @@ fun HomeScreen(
 
                 Spacer(modifier = Modifier.height(24.dp))
 
-                // First playlist title (if no track playing)
+                // First playlist title or chart info (if no track playing)
                 if (uiState.currentTrackTitle == null) {
-                    val firstPlaylistTitle = uiState.generatedPlaylists
-                        .firstOrNull()
-                        ?.data
-                        ?.title
+                    val displayTitle = uiState.generatedPlaylists
+                        .firstOrNull()?.data?.title
+                        ?: if (uiState.chartTracks.isNotEmpty()) "Чарт" else null
 
-                    if (firstPlaylistTitle != null) {
+                    if (displayTitle != null) {
                         Text(
-                            text = firstPlaylistTitle,
+                            text = displayTitle,
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onBackground
                         )

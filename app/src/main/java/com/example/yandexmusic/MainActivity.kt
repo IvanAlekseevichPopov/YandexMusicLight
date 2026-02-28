@@ -1,6 +1,8 @@
 package com.example.yandexmusic
 
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -51,6 +53,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             YandexMusicTheme {
                 var isLoggedIn by remember { mutableStateOf(tokenStorage.isLoggedIn) }
+
+                ApiClient.onUnauthorized = {
+                    tokenStorage.clear()
+                    Handler(Looper.getMainLooper()).post {
+                        isLoggedIn = false
+                    }
+                }
 
                 if (isLoggedIn) {
                     remember {
