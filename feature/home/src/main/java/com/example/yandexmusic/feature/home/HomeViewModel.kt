@@ -18,10 +18,17 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
+data class PlayableTrack(
+    val id: Long,
+    val title: String
+)
+
 data class HomeUiState(
     val isPlaying: Boolean = false,
     val generatedPlaylists: List<GeneratedPlaylist> = emptyList(),
     val chartTracks: List<ChartTrack> = emptyList(),
+    val trackList: List<PlayableTrack> = emptyList(),
+    val currentTrackIndex: Int = -1,
     val currentTrackUrl: TrackUrl? = null,
     val currentTrackTitle: String? = null,
     val isLoading: Boolean = false,
@@ -30,7 +37,10 @@ data class HomeUiState(
     val currentPosition: Long = 0L,
     val duration: Long = 0L,
     val progress: Float = 0f
-)
+) {
+    val hasPrevious: Boolean get() = currentTrackIndex > 0
+    val hasNext: Boolean get() = currentTrackIndex < trackList.lastIndex
+}
 
 class HomeViewModel(
     private val repository: MusicRepository,
@@ -57,10 +67,15 @@ class HomeViewModel(
         }
 
         audioPlayer.onTrackEnded = {
-            _uiState.update {
-                it.copy(isPlaying = false, progress = 0f, currentPosition = 0L)
+            val state = _uiState.value
+            if (state.hasNext) {
+                playNext()
+            } else {
+                _uiState.update {
+                    it.copy(isPlaying = false, progress = 0f, currentPosition = 0L)
+                }
+                stopProgressUpdates()
             }
-            stopProgressUpdates()
         }
 
         loadFeed()
@@ -80,9 +95,14 @@ class HomeViewModel(
                         Log.d(TAG, "loadFeed: no playlists, loading chart as fallback")
                         loadChart()
                     } else {
+                        val tracks = playlists.firstOrNull()?.data?.tracks
+                            ?.mapNotNull { t ->
+                                t.id?.let { PlayableTrack(it, t.track?.title ?: "Track $it") }
+                            } ?: emptyList()
                         _uiState.update { state ->
                             state.copy(
                                 generatedPlaylists = playlists,
+                                trackList = tracks,
                                 isLoading = false
                             )
                         }
@@ -103,11 +123,18 @@ class HomeViewModel(
     private suspend fun loadChart() {
         repository.getChart()
             .onSuccess { chartResult ->
-                val tracks = chartResult.chart?.tracks ?: emptyList()
-                Log.d(TAG, "loadChart: success, tracks=${tracks.size}")
+                val chartTracks = chartResult.chart?.tracks ?: emptyList()
+                Log.d(TAG, "loadChart: success, tracks=${chartTracks.size}")
+                val playable = chartTracks.mapNotNull { ct ->
+                    ct.track?.let { t ->
+                        val title = t.artists?.firstOrNull()?.let { "${it.name} — ${t.title}" } ?: t.title
+                        PlayableTrack(t.id, title)
+                    }
+                }
                 _uiState.update { state ->
                     state.copy(
-                        chartTracks = tracks,
+                        chartTracks = chartTracks,
+                        trackList = playable,
                         isLoading = false
                     )
                 }
@@ -155,21 +182,7 @@ class HomeViewModel(
     fun togglePlayPause() {
         val state = _uiState.value
         if (state.currentTrackUrl == null) {
-            // Нет текущего трека — берём первый из плейлиста или чарта
-            val playlistTrack = state.generatedPlaylists
-                .firstOrNull()?.data?.tracks?.firstOrNull()
-            if (playlistTrack != null) {
-                val playlistTitle = state.generatedPlaylists.firstOrNull()?.data?.title
-                playTrack(playlistTrack.id ?: return, playlistTitle)
-                return
-            }
-
-            val chartTrack = state.chartTracks.firstOrNull()?.track
-            if (chartTrack != null) {
-                val title = chartTrack.artists?.firstOrNull()?.let { "${it.name} — ${chartTrack.title}" }
-                    ?: chartTrack.title
-                playTrack(chartTrack.id, title)
-            }
+            playAtIndex(0)
             return
         }
 
@@ -178,6 +191,29 @@ class HomeViewModel(
         } else {
             audioPlayer.resume()
         }
+    }
+
+    fun playNext() {
+        val state = _uiState.value
+        val nextIndex = state.currentTrackIndex + 1
+        if (nextIndex <= state.trackList.lastIndex) {
+            playAtIndex(nextIndex)
+        }
+    }
+
+    fun playPrevious() {
+        val state = _uiState.value
+        val prevIndex = state.currentTrackIndex - 1
+        if (prevIndex >= 0) {
+            playAtIndex(prevIndex)
+        }
+    }
+
+    private fun playAtIndex(index: Int) {
+        val state = _uiState.value
+        val track = state.trackList.getOrNull(index) ?: return
+        _uiState.update { it.copy(currentTrackIndex = index) }
+        playTrack(track.id, track.title)
     }
 
     fun stop() {

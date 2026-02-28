@@ -14,11 +14,15 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.Button
+import androidx.compose.material.icons.filled.SkipNext
+import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -58,32 +62,64 @@ fun HomeScreen(
                     Spacer(modifier = Modifier.height(24.dp))
                 }
 
-                // Play/Pause Button
-                Button(
-                    onClick = { viewModel.togglePlayPause() },
-                    modifier = Modifier.size(80.dp),
-                    shape = CircleShape,
-                    enabled = !uiState.isLoadingTrack,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary
-                    )
+                // Playback controls
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(24.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (uiState.isLoadingTrack) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(32.dp),
-                            strokeWidth = 3.dp,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    } else {
+                    // Previous
+                    IconButton(
+                        onClick = { viewModel.playPrevious() },
+                        enabled = uiState.hasPrevious && !uiState.isLoadingTrack,
+                        modifier = Modifier.size(48.dp)
+                    ) {
                         Icon(
-                            imageVector = if (uiState.isPlaying) {
-                                Icons.Filled.Pause
-                            } else {
-                                Icons.Filled.PlayArrow
-                            },
-                            contentDescription = if (uiState.isPlaying) "Pause" else "Play",
-                            modifier = Modifier.size(40.dp),
-                            tint = MaterialTheme.colorScheme.onPrimary
+                            imageVector = Icons.Filled.SkipPrevious,
+                            contentDescription = "Previous",
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+
+                    // Play/Pause
+                    FilledIconButton(
+                        onClick = { viewModel.togglePlayPause() },
+                        modifier = Modifier.size(80.dp),
+                        shape = CircleShape,
+                        enabled = !uiState.isLoadingTrack,
+                        colors = IconButtonDefaults.filledIconButtonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        if (uiState.isLoadingTrack) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(32.dp),
+                                strokeWidth = 3.dp,
+                                color = MaterialTheme.colorScheme.onPrimary
+                            )
+                        } else {
+                            Icon(
+                                imageVector = if (uiState.isPlaying) {
+                                    Icons.Filled.Pause
+                                } else {
+                                    Icons.Filled.PlayArrow
+                                },
+                                contentDescription = if (uiState.isPlaying) "Pause" else "Play",
+                                modifier = Modifier.size(40.dp),
+                                tint = MaterialTheme.colorScheme.onPrimary
+                            )
+                        }
+                    }
+
+                    // Next
+                    IconButton(
+                        onClick = { viewModel.playNext() },
+                        enabled = uiState.hasNext && !uiState.isLoadingTrack,
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.SkipNext,
+                            contentDescription = "Next",
+                            modifier = Modifier.size(32.dp)
                         )
                     }
                 }
