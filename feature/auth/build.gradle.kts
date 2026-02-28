@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.yandexmusic.feature.home"
+    namespace = "com.example.yandexmusic.feature.auth"
     compileSdk = 34
 
     defaultConfig {
@@ -33,9 +33,6 @@ dependencies {
     implementation(project(":core:network"))
 
     implementation("androidx.core:core-ktx:1.12.0")
-
-    // ExoPlayer
-    implementation("androidx.media3:media3-exoplayer:1.2.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.7.0")
 
@@ -45,6 +42,9 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui-tooling-preview")
+
+    // Coil for captcha image
+    implementation("io.coil-kt:coil-compose:2.5.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 }

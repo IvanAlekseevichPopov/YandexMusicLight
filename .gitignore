@@ -1,19 +1,28 @@
 *.iml
 .gradle
 /local.properties
+local.properties
 /.idea
 .DS_Store
 /build
 /captures
 .externalNativeBuild
 .cxx
-local.properties
-core/app/build
-core/data/build
-core/network/build
-core/ui/build
-feature/home/build
-feature/library/build
-feature/search/build
+
+# Module build directories
 app/build
+core/*/build
+feature/*/build
+
+# Gradle
 /gradle
+gradle.properties.bak
+
+# Claude Code
+.claude/
+
+# Secrets
+*.jks
+*.keystore
+google-services.json
+AUTH_FLOW.md

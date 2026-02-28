@@ -1,66 +1,62 @@
 package com.example.yandexmusic.core.network
 
 import com.example.yandexmusic.core.network.dto.feed.FeedResponse
+import com.example.yandexmusic.core.network.dto.track.DownloadInfo
+import okhttp3.ResponseBody
 import retrofit2.http.GET
-import retrofit2.http.Header
 import retrofit2.http.Path
 import retrofit2.http.Query
+import retrofit2.http.Url
 
 /**
  * Yandex Music API интерфейс
- * Base URL: https://api.music.yandex.net
+ * Base URL: https://api.music.yandex.ru
  */
 interface YandexMusicApi {
 
     @GET("account/status")
-    suspend fun getAccountStatus(
-        @Header("Authorization") token: String
-    ): ApiResponse<AccountStatus>
+    suspend fun getAccountStatus(): ApiResponse<AccountStatus>
 
     @GET("search")
     suspend fun search(
-        @Header("Authorization") token: String,
         @Query("text") query: String,
         @Query("type") type: String = "all",
         @Query("page") page: Int = 0
     ): ApiResponse<SearchResult>
 
     @GET("landing3/chart")
-    suspend fun getChart(
-        @Header("Authorization") token: String
-    ): ApiResponse<ChartResult>
+    suspend fun getChart(): ApiResponse<ChartResult>
 
-    /**
-     * Получение фида рекомендаций
-     *
-     * Фид содержит:
-     * - generatedPlaylists: умные плейлисты (Плейлист дня, Дежавю, Премьера и т.д.)
-     * - headlines: заголовки блоков
-     * - days: данные по дням с событиями и рекомендациями
-     *
-     * @param token OAuth токен в формате "OAuth {token}"
-     * @return FeedResponse с полной структурой фида
-     */
     @GET("feed")
-    suspend fun getFeed(
-        @Header("Cookie") token: String
-    ): ApiResponse<FeedResponse>
+    suspend fun getFeed(): ApiResponse<FeedResponse>
 
     @GET("artists/{artistId}/brief-info")
     suspend fun getArtistInfo(
-        @Header("Authorization") token: String,
         @Path("artistId") artistId: Long
     ): ApiResponse<ArtistInfo>
 
-    companion object {
-        const val BASE_URL = "https://api.music.yandex.net/"
-        const val CLIENT_HEADER = "YandexMusicAndroid/24023621"
-    }
+    // === Download ===
+
+    /**
+     * Шаг 1: Получить информацию о вариантах скачивания трека
+     */
+    @GET("tracks/{trackId}/download-info")
+    suspend fun getDownloadInfo(
+        @Path("trackId") trackId: Long
+    ): ApiResponse<List<DownloadInfo>>
+
+    /**
+     * Шаг 2: Получить XML с параметрами для построения прямой ссылки
+     * @param url полный URL из downloadInfoUrl
+     */
+    @GET
+    suspend fun getDownloadInfoXml(
+        @Url url: String
+    ): ResponseBody
 }
 
 // === Общие модели ответов API ===
 
-/** Обёртка ответа API */
 data class ApiResponse<T>(val result: T?)
 
 // === Модели для Account ===

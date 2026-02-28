@@ -12,17 +12,27 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.example.yandexmusic.core.data.AuthRepository
 import com.example.yandexmusic.core.data.MusicRepository
+import com.example.yandexmusic.core.data.PlayerService
+import com.example.yandexmusic.core.data.TokenStorage
+import com.example.yandexmusic.core.network.ApiClient
 import com.example.yandexmusic.core.ui.theme.YandexMusicTheme
+import com.example.yandexmusic.feature.auth.AuthScreen
+import com.example.yandexmusic.feature.auth.AuthViewModel
 import com.example.yandexmusic.feature.home.HomeScreen
 import com.example.yandexmusic.feature.home.HomeViewModel
 import com.example.yandexmusic.feature.library.LibraryScreen
@@ -34,9 +44,30 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        val tokenStorage = TokenStorage(this)
+        val authRepository = AuthRepository(tokenStorage)
+
         setContent {
             YandexMusicTheme {
-                MainApp()
+                var isLoggedIn by remember { mutableStateOf(tokenStorage.isLoggedIn) }
+
+                if (isLoggedIn) {
+                    remember {
+                        ApiClient.setToken(tokenStorage.musicToken!!)
+                        true
+                    }
+                    MainApp()
+                } else {
+                    val authViewModel = remember { AuthViewModel(authRepository) }
+                    AuthScreen(
+                        viewModel = authViewModel,
+                        onAuthSuccess = { token ->
+                            ApiClient.setToken(token)
+                            isLoggedIn = true
+                        }
+                    )
+                }
             }
         }
     }
@@ -71,9 +102,10 @@ fun MainApp() {
             }
         }
     ) { innerPadding ->
-        // TODO: Получить токен из настроек/аутентификации
-        val repository = remember { MusicRepository(token = "3:1769601819.5.0.1763711976710:8RbzvA:d0d8.1.2:1|231491255.-1.2.0:3.3:1763711976.6:2200057229.7:1764490445|3:11660586.446672.HUiUh2_a0qHE5-ku-3vagyacFHE") }
-        val homeViewModel = remember { HomeViewModel(repository) }
+        val context = LocalContext.current.applicationContext
+        val repository = remember { MusicRepository() }
+        val playerService = remember { PlayerService(repository) }
+        val homeViewModel = remember { HomeViewModel(repository, playerService, context) }
 
         NavHost(
             navController = navController,

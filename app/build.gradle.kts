@@ -50,6 +50,7 @@ dependencies {
     implementation(project(":feature:home"))
     implementation(project(":feature:search"))
     implementation(project(":feature:library"))
+    implementation(project(":feature:auth"))
 
     // Core
     implementation("androidx.core:core-ktx:1.12.0")

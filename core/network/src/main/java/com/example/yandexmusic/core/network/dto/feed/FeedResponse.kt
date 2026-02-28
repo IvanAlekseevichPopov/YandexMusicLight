@@ -220,9 +220,9 @@ data class Event(
     @SerializedName("typeForFrom")
     val typeForFrom: String? = null,
 
-    /** Заголовок события */
+    /** Заголовок события (может быть String или List) */
     @SerializedName("title")
-    val title: List<TitlePart>? = null,
+    val title: Any? = null,
 
     /** Треки события (для type=tracks) */
     @SerializedName("tracks")
