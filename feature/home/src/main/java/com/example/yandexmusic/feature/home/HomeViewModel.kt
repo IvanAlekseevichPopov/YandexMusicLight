@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.yandexmusic.core.data.CachedTrack
 import com.example.yandexmusic.core.data.MusicRepository
 import com.example.yandexmusic.core.data.PlayerService
 import com.example.yandexmusic.core.data.TrackDownloadManager
@@ -155,21 +156,24 @@ class HomeViewModel(
 
     fun playTrack(trackId: Long, trackTitle: String? = null) {
         Log.d(TAG, "playTrack: trackId=$trackId, title=$trackTitle")
+        val index = _uiState.value.trackList.indexOfFirst { it.id == trackId }
+        _uiState.update { it.copy(currentTrackIndex = index) }
+
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingTrack = true, error = null) }
 
             // Проверяем локальный файл (downloaded → preloaded)
-            val localUri = trackDownloadManager.getCachedFileUri(trackId)
-            if (localUri != null) {
+            val cached = trackDownloadManager.getCachedTrack(trackId)
+            if (cached != null) {
                 Log.d(TAG, "playTrack: playing from cache")
                 _uiState.update { state ->
                     state.copy(
-                        currentTrackUrl = TrackUrl(localUri, "mp3", 192),
+                        currentTrackUrl = TrackUrl(cached.uri, cached.codec, cached.bitrateInKbps),
                         currentTrackTitle = trackTitle,
                         isLoadingTrack = false
                     )
                 }
-                audioPlayer.play(localUri)
+                audioPlayer.play(cached.uri)
                 triggerPreloadNext()
                 return@launch
             }
@@ -245,9 +249,7 @@ class HomeViewModel(
     }
 
     private fun playAtIndex(index: Int) {
-        val state = _uiState.value
-        val track = state.trackList.getOrNull(index) ?: return
-        _uiState.update { it.copy(currentTrackIndex = index) }
+        val track = _uiState.value.trackList.getOrNull(index) ?: return
         playTrack(track.id, track.title)
     }
 

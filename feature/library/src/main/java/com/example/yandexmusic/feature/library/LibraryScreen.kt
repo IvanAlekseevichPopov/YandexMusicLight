@@ -62,10 +62,10 @@ fun LibraryScreen(viewModel: LibraryViewModel) {
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = buildString {
-                                track.artistName?.let { append(it) }
-                                append(" · ${formatFileSize(track.fileSizeBytes)}")
-                            }.trimStart(' ', '·', ' '),
+                            text = listOfNotNull(
+                                track.artistName,
+                                formatFileSize(track.fileSizeBytes)
+                            ).joinToString(" · "),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,

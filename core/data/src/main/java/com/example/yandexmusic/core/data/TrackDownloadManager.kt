@@ -5,14 +5,29 @@ import android.net.Uri
 import android.util.Log
 import com.example.yandexmusic.core.data.db.DownloadedTrackDao
 import com.example.yandexmusic.core.data.db.DownloadedTrackEntity
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.OkHttpClient
 import okhttp3.Request
+import okhttp3.Response
 import java.io.File
+import java.io.IOException
+import kotlin.coroutines.coroutineContext
+import kotlin.coroutines.resumeWithException
+
+data class CachedTrack(
+    val uri: String,
+    val codec: String,
+    val bitrateInKbps: Int
+)
 
 /**
  * Управление скачиванием и кэшированием треков.
@@ -44,16 +59,25 @@ class TrackDownloadManager(
 
     // --- Cache checks ---
 
-    /** Проверяет permanent downloads → preload cache. Возвращает file:/// URI или null. */
-    suspend fun getCachedFileUri(trackId: Long): String? = withContext(Dispatchers.IO) {
+    /** Проверяет permanent downloads → preload cache. Возвращает CachedTrack или null. */
+    suspend fun getCachedTrack(trackId: Long): CachedTrack? = withContext(Dispatchers.IO) {
         val downloadFile = File(downloadDir, "$trackId.mp3")
         if (downloadFile.exists() && downloadFile.length() > 0) {
-            return@withContext Uri.fromFile(downloadFile).toString()
+            val entity = dao.getByTrackId(trackId)
+            return@withContext CachedTrack(
+                uri = Uri.fromFile(downloadFile).toString(),
+                codec = entity?.codec ?: "mp3",
+                bitrateInKbps = entity?.bitrateInKbps ?: 0
+            )
         }
 
         val preloadFile = File(preloadDir, "$trackId.mp3")
         if (preloadFile.exists() && preloadFile.length() > 0) {
-            return@withContext Uri.fromFile(preloadFile).toString()
+            return@withContext CachedTrack(
+                uri = Uri.fromFile(preloadFile).toString(),
+                codec = "mp3",
+                bitrateInKbps = 0
+            )
         }
 
         null
@@ -165,7 +189,7 @@ class TrackDownloadManager(
         val tmpFile = File(targetFile.parent, "${targetFile.name}.tmp")
         return try {
             val request = Request.Builder().url(trackUrl.url).build()
-            val response = httpClient.newCall(request).execute()
+            val response = awaitCall(httpClient.newCall(request))
 
             if (!response.isSuccessful) {
                 response.close()
@@ -177,6 +201,7 @@ class TrackDownloadManager(
                     val buffer = ByteArray(BUFFER_SIZE)
                     var bytesRead: Int
                     while (input.read(buffer).also { bytesRead = it } != -1) {
+                        coroutineContext.ensureActive()
                         output.write(buffer, 0, bytesRead)
                     }
                 }
@@ -188,12 +213,30 @@ class TrackDownloadManager(
             tmpFile.renameTo(targetFile)
             Log.d(TAG, "downloadToFile $trackId: complete, size=${targetFile.length()}")
             Result.success(targetFile)
+        } catch (e: CancellationException) {
+            Log.d(TAG, "downloadToFile $trackId: cancelled")
+            tmpFile.delete()
+            throw e
         } catch (e: Exception) {
             Log.e(TAG, "downloadToFile $trackId: failed", e)
             tmpFile.delete()
             Result.failure(e)
         }
     }
+
+    /** OkHttp Call → suspend с автоматической отменой при cancellation корутины. */
+    private suspend fun awaitCall(call: Call): Response =
+        suspendCancellableCoroutine { cont ->
+            cont.invokeOnCancellation { call.cancel() }
+            call.enqueue(object : Callback {
+                override fun onResponse(call: Call, response: Response) {
+                    cont.resume(response) { response.close() }
+                }
+                override fun onFailure(call: Call, e: IOException) {
+                    if (!cont.isCancelled) cont.resumeWithException(e)
+                }
+            })
+        }
 
     // TODO: progress callback Flow<Float> для UI индикации скачивания
     // TODO: LRU eviction для preload cache с настраиваемым max size

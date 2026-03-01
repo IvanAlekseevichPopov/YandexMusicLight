@@ -14,11 +14,9 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -28,13 +26,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import androidx.room.Room
 import com.example.yandexmusic.core.data.AuthRepository
-import com.example.yandexmusic.core.data.MusicRepository
-import com.example.yandexmusic.core.data.PlayerService
 import com.example.yandexmusic.core.data.TokenStorage
-import com.example.yandexmusic.core.data.TrackDownloadManager
-import com.example.yandexmusic.core.data.db.AppDatabase
 import com.example.yandexmusic.core.network.ApiClient
 import com.example.yandexmusic.core.ui.theme.YandexMusicTheme
 import com.example.yandexmusic.feature.auth.AuthScreen
@@ -116,26 +109,11 @@ fun MainApp() {
             }
         }
     ) { innerPadding ->
-        val context = LocalContext.current.applicationContext
-        val repository = remember { MusicRepository() }
-        val playerService = remember { PlayerService(repository) }
-        val database = remember {
-            Room.databaseBuilder(context, AppDatabase::class.java, "yandex_music_db").build()
-        }
-        val coroutineScope = rememberCoroutineScope()
-        val trackDownloadManager = remember {
-            TrackDownloadManager(
-                context = context,
-                playerService = playerService,
-                dao = database.downloadedTrackDao(),
-                httpClient = ApiClient.downloadClient,
-                scope = coroutineScope
-            )
-        }
+        val app = LocalContext.current.applicationContext as MusicApp
         val homeViewModel = remember {
-            HomeViewModel(repository, playerService, trackDownloadManager, context)
+            HomeViewModel(app.repository, app.playerService, app.trackDownloadManager, app)
         }
-        val libraryViewModel = remember { LibraryViewModel(trackDownloadManager) }
+        val libraryViewModel = remember { LibraryViewModel(app.trackDownloadManager) }
 
         NavHost(
             navController = navController,
