@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Описание проекта
 
-Музыкальное приложение для Android на основе API Yandex Music. Реализовано: OAuth-авторизация (логин/пароль с поддержкой captcha и SMS challenge), Home-экран с фидом, воспроизведение треков через ExoPlayer с прогресс-баром. Search и Library — заглушки.
+Музыкальное приложение для Android на основе API Yandex Music. Реализовано: OAuth-авторизация (логин/пароль с поддержкой captcha и SMS challenge), Home-экран с фидом/чартом, воспроизведение треков через ExoPlayer с прогресс-баром и навигацией (prev/next), предзагрузка следующего трека на диск, Library — список скачанных треков с оффлайн-воспроизведением. Search — заглушка.
 
 ## Разрешения агента
 
@@ -27,14 +27,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Модульная структура
 
 ```
-:app                 — точка входа (MainActivity), навигация, DI
-:core:network        — Retrofit API клиент (ApiClient, AuthApiClient), DTO модели
-:core:data           — MusicRepository, PlayerService, AuthRepository, TokenStorage
+:app                 — точка входа (MainActivity), навигация, DI (Room DB, TrackDownloadManager, ViewModels)
+:core:network        — Retrofit API клиент (ApiClient, AuthApiClient, downloadClient), DTO модели
+:core:data           — MusicRepository, PlayerService, AuthRepository, TokenStorage, TrackDownloadManager
+                       db/ — Room (AppDatabase, DownloadedTrackEntity, DownloadedTrackDao)
 :core:ui             — Material 3 тема (Yandex Yellow #FFCC00), Coil
 :feature:auth        — LoginScreen, ChallengeScreen, AuthViewModel (OAuth-флоу)
-:feature:home        — HomeScreen + HomeViewModel, AudioPlayer (ExoPlayer)
+:feature:home        — HomeScreen + HomeViewModel, AudioPlayer (ExoPlayer), предзагрузка треков
 :feature:search      — SearchScreen (заглушка)
-:feature:library     — LibraryScreen (заглушка)
+:feature:library     — LibraryScreen + LibraryViewModel (список скачанных треков)
 ```
 
 ## Граф зависимостей
@@ -43,8 +44,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 :app
  ├── :feature:auth ──┬── :core:ui
  ├── :feature:home ──┼── :core:data ── :core:network
- ├── :feature:search ┤
- └── :feature:library┘
+ ├── :feature:search ┤       │
+ └── :feature:library┘       ├── TrackDownloadManager (preload + permanent downloads)
+                             ├── PlayerService (URL resolution, 3-step)
+                             ├── MusicRepository (API wrapper)
+                             ├── TokenStorage (EncryptedSharedPreferences)
+                             └── db/ (Room: AppDatabase, DAO, Entity)
+```
+
+## Потоки данных
+
+**Воспроизведение с предзагрузкой:**
+```
+HomeViewModel.playTrack(id)
+  → TrackDownloadManager.getCachedFileUri(id)   // файл на диске?
+  ├─ есть  → AudioPlayer.play(file:///...)      // мгновенный старт
+  └─ нет   → PlayerService.getTrackUrl(id)      // 3-step URL resolution
+            → AudioPlayer.play(https://...)      // стриминг
+  → triggerPreloadNext()                         // фоновое скачивание N+1
+```
+
+**Скачивание трека:**
+```
+TrackDownloadManager.downloadTrack(id, title, artist)
+  → PlayerService.getTrackUrl(id)               // ephemeral URL
+  → OkHttp downloadClient → файл на диск        // filesDir/downloads/
+  → Room DAO.insert(entity)                      // метаданные в БД
 ```
 
 ## Архитектурные паттерны
@@ -53,6 +78,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Async:** `suspend fun` + `Result<T>` + `Dispatchers.IO`
 - **DI:** Ручная инициализация в MainActivity (планируется Hilt)
 - **Плеер:** ExoPlayer (Media3) в AudioPlayer обёртке, прогресс через polling каждые 500мс
+- **БД:** Room (KSP, `room.generateKotlin = true` для совместимости с JDK 21)
+- **Кэш:** Двухуровневый — preload (`cacheDir`, временный) + permanent (`filesDir`, Room метаданные)
+- **401:** Интерцептор в ApiClient → `onUnauthorized` → очистка токенов → экран авторизации
 
 ## Аутентификация
 
@@ -87,8 +115,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 3. URL: `https://{host}/get-mp3/{MD5(salt+path+s)}/{ts}{path}`
 
 **Плеер** (AudioPlayer → ExoPlayer):
-- `play(url)` → MediaItem → prepare → play
+- `play(url)` → MediaItem → prepare → play (поддерживает `https://` и `file:///`)
+- Навигация: prev/next по trackList, автопереход на следующий трек
 - Прогресс: polling каждые 500мс → HomeUiState.progress (0.0..1.0)
+
+**Предзагрузка** (TrackDownloadManager):
+- Preload cache: `cacheDir/tracks/{trackId}.mp3` (временный, ОС может удалить)
+- Permanent downloads: `filesDir/downloads/{trackId}.mp3` (постоянный, Room метаданные)
+- При воспроизведении трека — фоновое скачивание следующего
+
+## Хранение данных
+
+- **Токены:** `EncryptedSharedPreferences` (AES-256) в `TokenStorage`
+- **Скачанные треки:** Room `downloaded_tracks` (trackId, title, artistName, codec, bitrate, fileName, fileSize, downloadedAt)
+- **Preload cache:** `cacheDir/tracks/{trackId}.mp3` — автоочистка при `onCleared()`, ОС может удалить при нехватке места
+- **Downloads:** `filesDir/downloads/{trackId}.mp3` — постоянное хранение, управляется через Library экран
 
 ## TODO
 
@@ -105,3 +146,6 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 7. **DTO** — `@SerializedName` для Gson, классы в `dto/` пакетах :core:network
 8. **Обложки** — `cover_uri` содержит `%%`, заменять на `{size}x{size}` (200, 400, 600...)
 9. **Не коммитить** — `local.properties`, токены, cookie-строки
+10. **Room** — KSP с `room.generateKotlin = true`, миграции через fallbackToDestructiveMigration пока version=1
+11. **Скачивание** — URL эфемерные (ts+sign), скачивать сразу после resolve; `downloadClient` без auth-заголовков
+12. **Файловые URI** — использовать `Uri.fromFile(file).toString()` (не `File.toURI()`), ExoPlayer принимает `file:///`

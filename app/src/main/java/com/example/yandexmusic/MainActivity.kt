@@ -18,6 +18,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -27,10 +28,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.room.Room
 import com.example.yandexmusic.core.data.AuthRepository
 import com.example.yandexmusic.core.data.MusicRepository
 import com.example.yandexmusic.core.data.PlayerService
 import com.example.yandexmusic.core.data.TokenStorage
+import com.example.yandexmusic.core.data.TrackDownloadManager
+import com.example.yandexmusic.core.data.db.AppDatabase
 import com.example.yandexmusic.core.network.ApiClient
 import com.example.yandexmusic.core.ui.theme.YandexMusicTheme
 import com.example.yandexmusic.feature.auth.AuthScreen
@@ -38,6 +42,7 @@ import com.example.yandexmusic.feature.auth.AuthViewModel
 import com.example.yandexmusic.feature.home.HomeScreen
 import com.example.yandexmusic.feature.home.HomeViewModel
 import com.example.yandexmusic.feature.library.LibraryScreen
+import com.example.yandexmusic.feature.library.LibraryViewModel
 import com.example.yandexmusic.feature.search.SearchScreen
 import com.example.yandexmusic.navigation.Screen
 import com.example.yandexmusic.navigation.bottomNavItems
@@ -114,7 +119,23 @@ fun MainApp() {
         val context = LocalContext.current.applicationContext
         val repository = remember { MusicRepository() }
         val playerService = remember { PlayerService(repository) }
-        val homeViewModel = remember { HomeViewModel(repository, playerService, context) }
+        val database = remember {
+            Room.databaseBuilder(context, AppDatabase::class.java, "yandex_music_db").build()
+        }
+        val coroutineScope = rememberCoroutineScope()
+        val trackDownloadManager = remember {
+            TrackDownloadManager(
+                context = context,
+                playerService = playerService,
+                dao = database.downloadedTrackDao(),
+                httpClient = ApiClient.downloadClient,
+                scope = coroutineScope
+            )
+        }
+        val homeViewModel = remember {
+            HomeViewModel(repository, playerService, trackDownloadManager, context)
+        }
+        val libraryViewModel = remember { LibraryViewModel(trackDownloadManager) }
 
         NavHost(
             navController = navController,
@@ -123,7 +144,7 @@ fun MainApp() {
         ) {
             composable(Screen.Home.route) { HomeScreen(viewModel = homeViewModel) }
             composable(Screen.Search.route) { SearchScreen() }
-            composable(Screen.Library.route) { LibraryScreen() }
+            composable(Screen.Library.route) { LibraryScreen(viewModel = libraryViewModel) }
         }
     }
 }

@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.yandexmusic.core.data.MusicRepository
 import com.example.yandexmusic.core.data.PlayerService
+import com.example.yandexmusic.core.data.TrackDownloadManager
 import com.example.yandexmusic.core.network.ChartTrack
 import com.example.yandexmusic.core.network.dto.feed.GeneratedPlaylist
 import com.example.yandexmusic.core.network.dto.track.TrackUrl
@@ -45,6 +46,7 @@ data class HomeUiState(
 class HomeViewModel(
     private val repository: MusicRepository,
     private val playerService: PlayerService,
+    private val trackDownloadManager: TrackDownloadManager,
     context: Context
 ) : ViewModel() {
 
@@ -54,6 +56,7 @@ class HomeViewModel(
 
     private val audioPlayer = AudioPlayer(context)
     private var progressJob: Job? = null
+    private var preloadJob: Job? = null
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
@@ -155,6 +158,23 @@ class HomeViewModel(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoadingTrack = true, error = null) }
 
+            // Проверяем локальный файл (downloaded → preloaded)
+            val localUri = trackDownloadManager.getCachedFileUri(trackId)
+            if (localUri != null) {
+                Log.d(TAG, "playTrack: playing from cache")
+                _uiState.update { state ->
+                    state.copy(
+                        currentTrackUrl = TrackUrl(localUri, "mp3", 192),
+                        currentTrackTitle = trackTitle,
+                        isLoadingTrack = false
+                    )
+                }
+                audioPlayer.play(localUri)
+                triggerPreloadNext()
+                return@launch
+            }
+
+            // Сетевой путь
             playerService.getTrackUrl(trackId)
                 .onSuccess { trackUrl ->
                     Log.d(TAG, "playTrack: success, url=${trackUrl.url.take(80)}...")
@@ -166,6 +186,7 @@ class HomeViewModel(
                         )
                     }
                     audioPlayer.play(trackUrl.url)
+                    triggerPreloadNext()
                 }
                 .onFailure { exception ->
                     Log.e(TAG, "playTrack: failure", exception)
@@ -176,6 +197,20 @@ class HomeViewModel(
                         )
                     }
                 }
+        }
+    }
+
+    private fun triggerPreloadNext() {
+        preloadJob?.cancel()
+        val state = _uiState.value
+        val nextIndex = state.currentTrackIndex + 1
+        val nextTrack = state.trackList.getOrNull(nextIndex) ?: return
+
+        preloadJob = viewModelScope.launch {
+            Log.d(TAG, "triggerPreloadNext: preloading trackId=${nextTrack.id}")
+            trackDownloadManager.preloadTrack(nextTrack.id)
+            // TODO: Preload N+2 для ещё более плавного воспроизведения
+            // TODO: Preload только по WiFi (ConnectivityManager check)
         }
     }
 
@@ -264,6 +299,7 @@ class HomeViewModel(
 
     override fun onCleared() {
         super.onCleared()
+        preloadJob?.cancel()
         stopProgressUpdates()
         audioPlayer.release()
     }

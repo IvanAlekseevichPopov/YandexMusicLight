@@ -56,4 +56,10 @@ object ApiClient {
         .build()
 
     val api: YandexMusicApi = retrofit.create(YandexMusicApi::class.java)
+
+    /** HTTP-клиент для скачивания аудиофайлов. Без auth-заголовков — прямые URL pre-signed. */
+    val downloadClient: OkHttpClient = OkHttpClient.Builder()
+        .connectTimeout(30, TimeUnit.SECONDS)
+        .readTimeout(60, TimeUnit.SECONDS)
+        .build()
 }

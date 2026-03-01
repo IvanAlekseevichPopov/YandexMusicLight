@@ -68,6 +68,9 @@ dependencies {
     // Navigation
     implementation("androidx.navigation:navigation-compose:2.7.6")
 
+    // Room (for database builder in DI)
+    implementation("androidx.room:room-runtime:2.6.1")
+
     // Testing
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
