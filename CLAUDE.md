@@ -27,7 +27,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Модульная структура
 
 ```
-:app                 — точка входа (MainActivity), навигация, DI (Room DB, TrackDownloadManager, ViewModels)
+:app                 — точка входа (MainActivity, MusicApp), навигация, DI (singleton'ы в Application)
 :core:network        — Retrofit API клиент (ApiClient, AuthApiClient, downloadClient), DTO модели
 :core:data           — MusicRepository, PlayerService, AuthRepository, TokenStorage, TrackDownloadManager
                        db/ — Room (AppDatabase, DownloadedTrackEntity, DownloadedTrackDao)
@@ -57,7 +57,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Воспроизведение с предзагрузкой:**
 ```
 HomeViewModel.playTrack(id)
-  → TrackDownloadManager.getCachedFileUri(id)   // файл на диске?
+  → TrackDownloadManager.getCachedTrack(id)     // файл на диске?
   ├─ есть  → AudioPlayer.play(file:///...)      // мгновенный старт
   └─ нет   → PlayerService.getTrackUrl(id)      // 3-step URL resolution
             → AudioPlayer.play(https://...)      // стриминг
@@ -76,7 +76,7 @@ TrackDownloadManager.downloadTrack(id, title, artist)
 
 - **State:** `StateFlow<UiState>` + `ViewModel`, `collectAsState()` в Composable
 - **Async:** `suspend fun` + `Result<T>` + `Dispatchers.IO`
-- **DI:** Ручная инициализация в MainActivity (планируется Hilt)
+- **DI:** Lazy singleton'ы в `MusicApp` (Application), ViewModels через `remember` в Composable
 - **Плеер:** ExoPlayer (Media3) в AudioPlayer обёртке, прогресс через polling каждые 500мс
 - **БД:** Room (KSP, `room.generateKotlin = true` для совместимости с JDK 21)
 - **Кэш:** Двухуровневый — preload (`cacheDir`, временный) + permanent (`filesDir`, Room метаданные)
@@ -128,7 +128,7 @@ TrackDownloadManager.downloadTrack(id, title, artist)
 
 - **Токены:** `EncryptedSharedPreferences` (AES-256) в `TokenStorage`
 - **Скачанные треки:** Room `downloaded_tracks` (trackId, title, artistName, codec, bitrate, fileName, fileSize, downloadedAt)
-- **Preload cache:** `cacheDir/tracks/{trackId}.mp3` — автоочистка при `onCleared()`, ОС может удалить при нехватке места
+- **Preload cache:** `cacheDir/tracks/{trackId}.mp3` — автоочистка при инициализации TrackDownloadManager, ОС может удалить при нехватке места
 - **Downloads:** `filesDir/downloads/{trackId}.mp3` — постоянное хранение, управляется через Library экран
 
 ## TODO
@@ -147,5 +147,5 @@ TrackDownloadManager.downloadTrack(id, title, artist)
 8. **Обложки** — `cover_uri` содержит `%%`, заменять на `{size}x{size}` (200, 400, 600...)
 9. **Не коммитить** — `local.properties`, токены, cookie-строки
 10. **Room** — KSP с `room.generateKotlin = true`, миграции через fallbackToDestructiveMigration пока version=1
-11. **Скачивание** — URL эфемерные (ts+sign), скачивать сразу после resolve; `downloadClient` без auth-заголовков
+11. **Скачивание** — URL эфемерные (ts+sign), скачивать сразу после resolve; `downloadClient` без auth-заголовков; запись в `.tmp` → rename (атомарность); `suspendCancellableCoroutine` для отмены HTTP-запросов
 12. **Файловые URI** — использовать `Uri.fromFile(file).toString()` (не `File.toURI()`), ExoPlayer принимает `file:///`
